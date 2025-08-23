@@ -42,7 +42,6 @@ jobs:
       - name: 🚀 Deploy Lambda (create or update)
         run: |
           set -e
-          cd backend
 
           echo "Checking if Lambda function '$FUNCTION_NAME' exists..."
 
