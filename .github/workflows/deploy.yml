@@ -18,7 +18,7 @@ env:
   LAMBDA_ALIAS: ${{ secrets.LAMBDA_ALIAS || '' }}      # optional; e.g., prod
 
 jobs:
-  bootstrap-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
