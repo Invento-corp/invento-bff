@@ -1,9 +1,9 @@
-name: Bootstrap & Deploy: Lambda + API Gateway + DynamoDB
+name: Deploy Angular to AWS S3
 
 on:
   push:
-    branches: [ "main" ]
-  workflow_dispatch:
+    branches:
+      - main  # or your deployment branch
 
 permissions:
   id-token: write     # for OIDC (recommended)
