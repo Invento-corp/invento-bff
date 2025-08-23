@@ -61,4 +61,3 @@ jobs:
               --handler "$HANDLER" \
               --zip-file fileb://lambda.zip \
               --region "$AWS_REGION"
-          fi
