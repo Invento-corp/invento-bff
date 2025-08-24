@@ -2,62 +2,82 @@ name: Deploy Lambda to AWS
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+    paths:
+      - 'invento-bff/**'
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
   FUNCTION_NAME: my-api-lambda
   HANDLER: lambda.handler
-  RUNTIME: nodejs18.x
+  RUNTIME: nodejs20.x
   IAM_ROLE_ARN: ${{ secrets.LAMBDA_EXEC_ROLE }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: invento-bff
 
     steps:
       - name: ⬇️ Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: ⚙️ Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
-      - name: 📦 Install dependencies
-        run: npm install
-
-      - name: 🗜️ Zip Lambda code
+      - name: 📦 Install prod deps
         run: |
-          zip -r lambda.zip . -x "*.git*" "node_modules/aws-sdk/*"
+          npm ci
+          npm prune --production
+
+      - name: 🗜️ Zip Lambda code (exclude git, workflows, README)
+        run: |
+          zip -r ../build.zip . -x ".git/*" ".github/*" "README.md"
 
       - name: 🔐 Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: 🚀 Deploy Lambda (create or update)
+      - name: 🚀 Create or Update Lambda
+        shell: bash
+        env:
+          ZIP_PATH: build.zip
         run: |
           set -e
 
           echo "Checking if Lambda function '$FUNCTION_NAME' exists..."
-
           if aws lambda get-function --function-name "$FUNCTION_NAME" > /dev/null 2>&1; then
-            echo "Lambda exists — updating code..."
+            echo "Updating code..."
             aws lambda update-function-code \
               --function-name "$FUNCTION_NAME" \
-              --zip-file fileb://lambda.zip \
-              --region "$AWS_REGION"
+              --zip-file fileb://../$ZIP_PATH \
+              --region "$AWS_REGION" >/dev/null
+
+            echo "Ensuring config (runtime/handler) is correct..."
+            aws lambda update-function-configuration \
+              --function-name "$FUNCTION_NAME" \
+              --runtime "$RUNTIME" \
+              --handler "$HANDLER" \
+              --region "$AWS_REGION" >/dev/null
           else
             echo "Lambda does not exist — creating it..."
+            if [ -z "$IAM_ROLE_ARN" ]; then
+              echo "ERROR: LAMBDA_EXEC_ROLE secret (IAM role ARN) is missing." >&2
+              exit 1
+            fi
             aws lambda create-function \
               --function-name "$FUNCTION_NAME" \
               --runtime "$RUNTIME" \
               --role "$IAM_ROLE_ARN" \
               --handler "$HANDLER" \
-              --zip-file fileb://lambda.zip \
-              --region "$AWS_REGION"
+              --zip-file fileb://../$ZIP_PATH \
+              --region "$AWS_REGION" >/dev/null
           fi
